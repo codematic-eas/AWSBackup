@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Creates AWS Backup Vaults, this need to create each slacve / child account by region'
+Parameters:   
+  MasterAccountID:
+    Type: 'String'
+    Description: Mater Account's Organization ID
+    AllowedValues:
+        - 0-11111111 ## replace with your root OU account ID
+  KMSKeyARN:
+    Type: 'String'
+    Description: KMS Key ARN for this account and region
+  environmentName:
+    Description: The name of the environment being deployed to.
+    Type: 'String'
+    Default: sandbox
+    AllowedValues:
+      - dev
+      - test
+      - prod
+
+Resources:     
+
+  AWSBackupVault:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: crossaccount_awsbackup_vault
+      EncryptionKeyArn: arn:aws:kms:XX-XXXX-X:111111111111:key/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX ## need to replace
+      AccessPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow access to backup vault"
+            Effect: Allow
+            Action: backup:CopyIntoBackupVault
+            Resource: "*"
+            Principal: "*"
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref MasterAccountID
+
+Outputs:
+  AWSBackupVault:
+    Description: Provisiong AWS Backup vault for each account and region
+    Value: !Ref AWSBackupVault
+    Export:
+      Name: !Sub '${AWS::StackName}-${environmentName}-AWSBackupVault'
+ 
