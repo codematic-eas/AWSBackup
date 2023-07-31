@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Creates a custom AWS KMS custom master key (CMK) and associated key policies, this need to create each slacve / child account by region'
+Parameters:
+  KMSKeyName:
+    Type: 'String'
+    Description: The name of the application you are deploying
+    Default: awsbackup  
+  TagOwnerValue:
+    Type: 'String'
+    Default: sample@sample.com
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:  
+      - dev
+      - test
+      - prod
+  CMKDescription:
+    ConstraintDescription: please specify a valid description.
+    Description: 'Please specify the description for the KMS CMK: maximum = 8192 characters.'
+    Type: String
+    Default: "This key is used for AWS Backup" 
+
+Resources:
+  Key:
+    Type: AWS::KMS::Key
+    Properties:
+
+     
+      Tags:
+      -
+        Key: Owner
+        Value: !Ref TagOwnerValue
+      -
+        Key: KMSKeyName
+        Value: !Ref KMSKeyName
+
+      Description: !Ref 'CMKDescription'
+      EnableKeyRotation: true 
+      KeyPolicy:
+        Id: !Join  ['', ['crossaccount-', !Ref "Env", "-", !Ref "KMSKeyName", '-kms-key-policy']]
+        Statement:
+
+
+          - Sid: Enable IAM Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:*
+            Resource: "*"
+            
+            
+          - Sid: "Allow use of the key"
+            Action:
+            - kms:DescribeKey
+            - kms:Encrypt
+            - kms:Decrypt
+            - kms:ReEncrypt*
+            - kms:GenerateDataKey
+            - kms:GenerateDataKeyWithoutPlaintext 
+            Effect: Allow  
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/crossaccount-awsbackup-role'
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService": !Sub "backup.amazonaws.com"
+            
+            
+          - Sid: Allow attachment of persistent resources
+            Action:
+            - kms:CreateGrant
+            - kms:ListGrants
+            - kms:RevokeGrant
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/crossaccount-awsbackup-role' 
+            Resource: "*"
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: true
+
+
+
+  KeyAlias:
+    Type: 'AWS::KMS::Alias'
+    Properties:
+      AliasName: alias/crossaccount-awabackup-encryptkey 
+      TargetKeyId: !Ref Key
+Outputs:
+  CMKARN:
+    Description: Amazon Resource Name (ARN) of the custom KMS CMK.
+    Export:
+      Name: !Sub '${AWS::StackName}-CMKARN'
+    Value: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${Key}'
+  CMKID:
+    Description: ID of the custom KMS CMK created by this stack.
+    Value: !Ref 'Key'      
