@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Creates role for backup and policies, have to create all slave / child account'
+Parameters:   
+  IAMRoleName:
+    Type: 'String'
+    Description: The name of the role you are deploying
+    Default: awsbackup
+  TagOwnerValue:
+    Type: 'String'
+    Default: sample@sample.com
+  environmentName:
+    Description: The name of the environment being deployed to.
+    Type: 'String'
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+
+Resources:     
+
+########## AWSBackup Role #############
+
+  AWSBackupRole: 
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Tags:
+        - Key: "IAMRoleName"
+          Value: !Ref IAMRoleName
+        - Key: "Owner"
+          Value: !Ref TagOwnerValue
+        - Key: "Env"
+          Value: !Ref environmentName
+        - Key: "Name"
+          Value: !Join [ '', ['crossaccount-', !Ref IAMRoleName, '-role']]
+      Description: Allows AWS Backup to call AWS services
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+              - backup.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+      RoleName: !Join [ '', ['crossaccount-', !Ref IAMRoleName, '-role']]
+
+Outputs:
+  AWSBackupRole:
+    Description: Allows AWS Backup to call AWS services
+    Value: !Ref AWSBackupRole
+    Export:
+      Name: !Sub '${AWS::StackName}-${environmentName}-AWSBackupRole'
+ 
